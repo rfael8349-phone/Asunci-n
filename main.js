@@ -1,29 +1,72 @@
 import * as THREE from 'three';
 
-// --- RENDERER Y ESCENA ESTILO 2004 (CALOR TROPICAL + NIEBLA DE DISTANCIA) ---
-const scene = new THREE.Scene();
-const skyColor = new THREE.Color(0x9bc4e2);
-scene.background = skyColor;
-scene.fog = new THREE.FogExp2(0xa7cadf, 0.0052);
+// --- SONIDO RETRO 16-BIT SINTETIZADO (WEB AUDIO API SIN ARCHIVOS EXTERNOS) ---
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx) audioCtx = new Ctx();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+}
 
-const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 450);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+function playRetroTone(freqStart, freqEnd, duration, type = 'square', gainVal = 0.08) {
+  ensureAudio();
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freqStart, now);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(30, freqEnd), now + duration);
+
+  gain.gain.setValueAtTime(gainVal, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + duration);
+}
+
+// --- ESCENA 3D PIXELADA 16-BIT ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x161a26);
+scene.fog = new THREE.FogExp2(0x161a26, 0.0105);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 240);
+
+const PIXEL_SCALE = 0.44;
+const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.06;
+renderer.shadowMap.type = THREE.BasicShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// --- GENERADOR DE TEXTURAS PROCEDURALES (ESTILO TEXTURAS 2004 / PS2) ---
-function createProceduralTexture(drawFn, repeatX = 1, repeatY = 1, size = 256) {
+function resizeRenderer() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(Math.max(1, Math.floor(w * PIXEL_SCALE)), Math.max(1, Math.floor(h * PIXEL_SCALE)), false);
+  renderer.domElement.style.width = `${w}px`;
+  renderer.domElement.style.height = `${h}px`;
+}
+resizeRenderer();
+window.addEventListener('resize', resizeRenderer);
+
+// --- TEXTURAS PIXELADAS 16-BIT ---
+function makePixelTex(drawFn, repeatX = 1, repeatY = 1, size = 64) {
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
   drawFn(ctx, size);
   const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX, repeatY);
@@ -31,187 +74,59 @@ function createProceduralTexture(drawFn, repeatX = 1, repeatY = 1, size = 256) {
   return tex;
 }
 
-// Textura de asfalto desgastado con líneas y grietas
-const asphaltTex = createProceduralTexture((ctx, s) => {
-  ctx.fillStyle = '#36393f';
+const stoneFloorTex = makePixelTex((ctx, s) => {
+  ctx.fillStyle = '#363f33';
   ctx.fillRect(0, 0, s, s);
-  for (let i = 0; i < 2400; i++) {
-    const x = (i * 73) % s;
-    const y = (i * 137) % s;
-    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.14)';
-    ctx.fillRect(x, y, 2, 2);
-  }
-  ctx.strokeStyle = 'rgba(225, 225, 210, 0.28)';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([18, 16]);
-  ctx.beginPath();
-  ctx.moveTo(s / 2, 0);
-  ctx.lineTo(s / 2, s);
-  ctx.stroke();
-}, 24, 24);
-
-// Textura de pasto / césped con briznas y parches de tierra
-const grassTex = createProceduralTexture((ctx, s) => {
-  ctx.fillStyle = '#487a34';
-  ctx.fillRect(0, 0, s, s);
-  for (let i = 0; i < 2600; i++) {
-    const x = (i * 97) % s;
-    const y = (i * 53) % s;
-    const shade = i % 3;
-    ctx.fillStyle = shade === 0 ? '#5a913f' : shade === 1 ? '#396328' : '#6c8738';
-    ctx.fillRect(x, y, 2, 5);
-  }
-}, 18, 18);
-
-// Textura de baldosa / vereda / piedra colonial
-const paverTex = createProceduralTexture((ctx, s) => {
-  ctx.fillStyle = '#c8beae';
-  ctx.fillRect(0, 0, s, s);
-  ctx.strokeStyle = 'rgba(80, 70, 58, 0.35)';
-  ctx.lineWidth = 2;
-  const step = s / 4;
-  for (let gx = 0; gx <= s; gx += step) {
-    ctx.beginPath();
-    ctx.moveTo(gx, 0);
-    ctx.lineTo(gx, s);
-    ctx.stroke();
-  }
-  for (let gy = 0; gy <= s; gy += step) {
-    ctx.beginPath();
-    ctx.moveTo(0, gy);
-    ctx.lineTo(s, gy);
-    ctx.stroke();
-  }
-}, 8, 8);
-
-// Textura de fachada con ventanas, revoque y molduras (estilo centro de Asunción)
-function makeFacadeTexture(wallHex, trimHex, floors = 2, cols = 4, hasArcades = false) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = wallHex;
-  ctx.fillRect(0, 0, 512, 512);
-
-  // Grano sutil de revoque
-  for (let i = 0; i < 1800; i++) {
-    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
-    ctx.fillRect((i * 61) % 512, (i * 109) % 512, 3, 2);
-  }
-
-  // Cornisa superior y franjas horizontales
-  ctx.fillStyle = trimHex;
-  ctx.fillRect(0, 0, 512, 26);
-  ctx.fillRect(0, 486, 512, 26);
-
-  const floorH = (460 - 40) / floors;
-  const cellW = 512 / cols;
-
-  for (let f = 0; f < floors; f++) {
-    const yBase = 36 + f * floorH;
-    if (f > 0) {
-      ctx.fillStyle = trimHex;
-      ctx.fillRect(0, yBase - 8, 512, 8);
-    }
-
-    for (let c = 0; c < cols; c++) {
-      const xBase = c * cellW;
-      const winW = cellW * 0.44;
-      const winH = floorH * 0.48;
-      const wx = xBase + (cellW - winW) / 2;
-      const wy = yBase + floorH * 0.22;
-
-      // Marco de ventana / abertura
-      ctx.fillStyle = trimHex;
-      ctx.fillRect(wx - 5, wy - 5, winW + 10, winH + 10);
-
-      // Vidrio oscuro reflectante estilo 2004
-      ctx.fillStyle = hasArcades && f === floors - 1 ? '#2b211b' : '#263b4d';
-      ctx.fillRect(wx, wy, winW, winH);
-
-      // Brillo diagonal en ventana
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
-      ctx.beginPath();
-      ctx.moveTo(wx + 4, wy + winH - 4);
-      ctx.lineTo(wx + winW * 0.65, wy + 4);
-      ctx.lineTo(wx + winW * 0.85, wy + 4);
-      ctx.lineTo(wx + winW * 0.25, wy + winH - 4);
-      ctx.closePath();
-      ctx.fill();
+  const tile = s / 4;
+  for (let gx = 0; gx < 4; gx++) {
+    for (let gy = 0; gy < 4; gy++) {
+      ctx.fillStyle = (gx + gy) % 2 === 0 ? '#424d3d' : '#2f372c';
+      ctx.fillRect(gx * tile + 1, gy * tile + 1, tile - 2, tile - 2);
+      ctx.fillStyle = '#5f8a39';
+      ctx.fillRect(gx * tile + 3, gy * tile + 3, 2, 2);
+      ctx.fillRect(gx * tile + 10, gy * tile + 8, 2, 2);
     }
   }
+}, 14, 14, 64);
 
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
+const brickWallTex = makePixelTex((ctx, s) => {
+  ctx.fillStyle = '#4b5061';
+  ctx.fillRect(0, 0, s, s);
+  ctx.fillStyle = '#282c36';
+  for (let y = 0; y < s; y += 8) {
+    ctx.fillRect(0, y, s, 2);
+    const offset = (y / 8) % 2 === 0 ? 0 : 8;
+    for (let x = offset; x < s; x += 16) {
+      ctx.fillRect(x, y, 2, 8);
+    }
+  }
+}, 2, 2, 64);
 
-// --- CIELO CON SOL Y NUBES DE CAPA ESTILO 2004 ---
-const skyDome = new THREE.Mesh(
-  new THREE.SphereGeometry(260, 24, 16),
-  new THREE.MeshBasicMaterial({
-    map: createProceduralTexture((ctx, s) => {
-      const grad = ctx.createLinearGradient(0, 0, 0, s);
-      grad.addColorStop(0.0, '#3a78b5');
-      grad.addColorStop(0.45, '#7cb2d9');
-      grad.addColorStop(0.75, '#c7e0ee');
-      grad.addColorStop(1.0, '#dce9ef');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
+// --- ILUMINACIÓN ---
+const hemi = new THREE.HemisphereLight(0x9fb6eb, 0x2c3a27, 1.0);
+scene.add(hemi);
 
-      // Nubes suaves estilo San Andreas / Vice City
-      ctx.fillStyle = 'rgba(255, 250, 240, 0.45)';
-      for (let i = 0; i < 14; i++) {
-        const cx = ((i * 79) % (s - 60)) + 30;
-        const cy = s * 0.35 + ((i * 37) % (s * 0.25));
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, 42, 11, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }, 2, 1, 512),
-    side: THREE.BackSide,
-    fog: false
-  })
-);
-scene.add(skyDome);
+const moonLight = new THREE.DirectionalLight(0xd2e0ff, 1.3);
+moonLight.position.set(28, 45, 24);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(1024, 1024);
+const bound = 45;
+moonLight.shadow.camera.left = -bound;
+moonLight.shadow.camera.right = bound;
+moonLight.shadow.camera.top = bound;
+moonLight.shadow.camera.bottom = -bound;
+scene.add(moonLight);
 
-const sunMesh = new THREE.Mesh(
-  new THREE.SphereGeometry(8, 16, 16),
-  new THREE.MeshBasicMaterial({ color: 0xfff3b0, fog: false })
-);
-sunMesh.position.set(85, 125, 60);
-scene.add(sunMesh);
-
-// --- ILUMINACIÓN SOLAR CÁLIDA ---
-const hemiLight = new THREE.HemisphereLight(0xfff5dc, 0x4d6338, 0.9);
-scene.add(hemiLight);
-
-const dirLight = new THREE.DirectionalLight(0xffe9b5, 1.45);
-dirLight.position.set(85, 125, 60);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.width = 2048;
-dirLight.shadow.mapSize.height = 2048;
-dirLight.shadow.camera.near = 15;
-dirLight.shadow.camera.far = 300;
-const shadowBound = 125;
-dirLight.shadow.camera.left = -shadowBound;
-dirLight.shadow.camera.right = shadowBound;
-dirLight.shadow.camera.top = shadowBound;
-dirLight.shadow.camera.bottom = -shadowBound;
-scene.add(dirLight);
-
-// --- SISTEMA DE COLISIONES (CAJAS Y RAMPAS DE ESCALERA) ---
+// --- ESCENARIO DE RUINAS CON ANTORCHAS ANIMADAS, PILARES Y OBSTÁCULOS ---
 const colliders = [];
-const ramps = [];
+const ARENA_HALF = 34;
 
-function addBox(x, y, z, w, h, d, materialOrColor, solid = true) {
-  const geo = new THREE.BoxGeometry(w, h, d);
+function addBlock(x, y, z, w, h, d, matOrHex, solid = true) {
   const mat =
-    materialOrColor instanceof THREE.Material
-      ? materialOrColor
-      : new THREE.MeshStandardMaterial({ color: materialOrColor, roughness: 0.84 });
-  const mesh = new THREE.Mesh(geo, mat);
+    matOrHex instanceof THREE.Material
+      ? matOrHex
+      : new THREE.MeshStandardMaterial({ color: matOrHex, roughness: 0.85 });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   mesh.position.set(x, y + h / 2, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -221,8 +136,6 @@ function addBox(x, y, z, w, h, d, materialOrColor, solid = true) {
     colliders.push({
       minX: x - w / 2,
       maxX: x + w / 2,
-      minY: y,
-      maxY: y + h,
       minZ: z - d / 2,
       maxZ: z + d / 2
     });
@@ -230,322 +143,428 @@ function addBox(x, y, z, w, h, d, materialOrColor, solid = true) {
   return mesh;
 }
 
-// Escalera real con peldaños visibles + rampa colisionable suave para subir caminando/corriendo
-function addStaircase(x, yStart, zStart, width, totalHeight, totalDepth, stepsCount, dirZ = -1, stepColor = 0xd6cec0) {
-  const stepH = totalHeight / stepsCount;
-  const stepD = totalDepth / stepsCount;
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(ARENA_HALF * 2, ARENA_HALF * 2),
+  new THREE.MeshStandardMaterial({ map: stoneFloorTex, roughness: 0.9 })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
 
-  for (let i = 0; i < stepsCount; i++) {
-    const sy = yStart + i * stepH;
-    const sz = zStart + dirZ * (i * stepD + stepD / 2);
-    addBox(x, sy, sz, width, stepH, stepD * 1.05, stepColor, false);
+const wallMat = new THREE.MeshStandardMaterial({ map: brickWallTex, roughness: 0.88 });
+
+// Muros perimetrales
+addBlock(0, 0, -ARENA_HALF, ARENA_HALF * 2 + 4, 6, 4, wallMat, true);
+addBlock(0, 0, ARENA_HALF, ARENA_HALF * 2 + 4, 6, 4, wallMat, true);
+addBlock(-ARENA_HALF, 0, 0, 4, 6, ARENA_HALF * 2, wallMat, true);
+addBlock(ARENA_HALF, 0, 0, 4, 6, ARENA_HALF * 2, wallMat, true);
+
+// Pilares y antorchas titilantes
+const flames = [];
+const pillars = [
+  [-12, -12],
+  [12, -12],
+  [-12, 12],
+  [12, 12],
+  [0, -18],
+  [0, 18]
+];
+pillars.forEach(([px, pz], idx) => {
+  addBlock(px, 0, pz, 3.2, 5.2, 3.2, wallMat, true);
+  addBlock(px, 5.2, pz, 3.6, 0.45, 3.6, 0x646c7d, false);
+
+  const flame = new THREE.Mesh(
+    new THREE.BoxGeometry(0.75, 0.95, 0.75),
+    new THREE.MeshBasicMaterial({ color: idx % 2 === 0 ? 0xff9f1c : 0x56cfe1 })
+  );
+  flame.position.set(px, 6.0, pz);
+  scene.add(flame);
+  flames.push({ mesh: flame, phase: idx * 1.3 });
+});
+
+// Cajas rompibles de madera/suministros que sueltan vida o puntos
+const crates = [];
+function spawnCrate(x, z) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 1.5, 1.5),
+    new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.85 })
+  );
+  mesh.position.set(x, 0.75, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  crates.push({ mesh, hp: 20 });
+}
+
+[
+  [-6, -6],
+  [6, -6],
+  [-6, 6],
+  [6, 6]
+].forEach(([cx, cz]) => spawnCrate(cx, cz));
+
+// --- PARTÍCULAS Y ITEMS DROPEADOS (POCIONES DE VIDA / CRISTALES) ---
+const particles = [];
+const pickups = [];
+
+function spawnHitParticles(x, y, z, colorHex, count = 7) {
+  for (let i = 0; i < count; i++) {
+    const p = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.24, 0.24),
+      new THREE.MeshBasicMaterial({ color: colorHex })
+    );
+    p.position.set(x, y, z);
+    scene.add(p);
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const spd = 2.5 + Math.random() * 4.0;
+    particles.push({
+      mesh: p,
+      vx: Math.cos(angle) * spd,
+      vy: 2.2 + Math.random() * 3.5,
+      vz: Math.sin(angle) * spd,
+      life: 0.35 + Math.random() * 0.15
+    });
   }
-
-  // Rampa invisible de subida suave para que el personaje suba sin trabarse peldaño a peldaño
-  const minZ = Math.min(zStart, zStart + dirZ * totalDepth);
-  const maxZ = Math.max(zStart, zStart + dirZ * totalDepth);
-  ramps.push({
-    minX: x - width / 2,
-    maxX: x + width / 2,
-    minZ,
-    maxZ,
-    yStart,
-    yEnd: yStart + totalHeight,
-    dirZ,
-    zStart,
-    totalDepth
-  });
 }
 
-// Cartel de calle / hito histórico
-function createLandmarkSign(title, subtitle, x, y, z, rotY = 0) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 192;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#12161f';
-  ctx.fillRect(0, 0, 512, 192);
-  ctx.strokeStyle = '#f7c948';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(8, 8, 496, 176);
-
-  ctx.fillStyle = '#f7c948';
-  ctx.font = 'bold 32px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(title, 256, 76);
-
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = '21px sans-serif';
-  ctx.fillText(subtitle, 256, 130);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 2.7), mat);
-  plane.position.set(x, y, z);
-  plane.rotation.y = rotY;
-  scene.add(plane);
+function spawnPickup(x, z, kind = 'potion') {
+  const color = kind === 'potion' ? 0x38d996 : 0xf5c542;
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 0.7, 0.7),
+    new THREE.MeshBasicMaterial({ color })
+  );
+  mesh.position.set(x, 0.6, z);
+  scene.add(mesh);
+  pickups.push({ mesh, kind, age: 0 });
 }
 
-// --- SUELO: CALLES DE ASFALTO + PARQUES CON PASTO ---
-const roadMat = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.9 });
-const grassMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.92 });
-const paverMat = new THREE.MeshStandardMaterial({ map: paverTex, roughness: 0.85 });
-
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(420, 420), roadMat);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// --- ÁRBOLES CON TRONCO RAMIFICADO Y COPA FRONDOSA (ESTILO 2004) ---
-function addTree(x, z, crownColor = 0x3b7a2a, scale = 1) {
-  // Tronco
-  addBox(x, 0, z, 0.55 * scale, 2.8 * scale, 0.55 * scale, 0x5c3d28, true);
-
-  const cMat = new THREE.MeshStandardMaterial({ color: crownColor, roughness: 0.82 });
-  const mainCrown = new THREE.Mesh(new THREE.IcosahedronGeometry(2.1 * scale, 1), cMat);
-  mainCrown.position.set(x, 3.9 * scale, z);
-  mainCrown.scale.set(1.15, 0.85, 1.15);
-  mainCrown.castShadow = true;
-  mainCrown.receiveShadow = true;
-  scene.add(mainCrown);
-
-  const subCrown = new THREE.Mesh(new THREE.DodecahedronGeometry(1.45 * scale, 1), cMat);
-  subCrown.position.set(x + 0.8 * scale, 3.4 * scale, z - 0.5 * scale);
-  subCrown.castShadow = true;
-  scene.add(subCrown);
-}
-
-// --- 1. PLAZA DE LA DEMOCRACIA (X: 0, Z: 0) CON PASTO, CANTEROS Y ESCALERAS ---
-addBox(0, 0, 0, 52, 0.24, 46, paverMat, false);
-
-// Áreas verdes con pasto dentro de la plaza
-addBox(-14, 0.24, -8, 15, 0.16, 14, grassMat, false);
-addBox(14, 0.24, -8, 15, 0.16, 14, grassMat, false);
-addBox(-14, 0.24, 9, 15, 0.16, 12, grassMat, false);
-addBox(14, 0.24, 9, 15, 0.16, 12, grassMat, false);
-
-// Tarima / mirador elevado con escalera real accesible
-addBox(0, 0.24, -7, 12, 0.9, 10, paverMat, true);
-addStaircase(0, 0.24, -2, 4.5, 0.9, 2.4, 5, -1, 0xded6c8);
-
-createLandmarkSign('PLAZA DE LA DEMOCRACIA', 'Microcentro de Asunción — Paraguay', 0, 4.8, -19, 0);
-
-const plazaTrees = [
-  [-15, -9, 0xd85a88, 1.1], // Tajy / Lapacho rosado
-  [15, -9, 0x3a7d2c, 1.15],
-  [-15, 9, 0x458b32, 1.0],
-  [15, 9, 0xe8b825, 1.1],  // Lapacho amarillo
-  [-9, 10, 0x336e26, 0.95],
-  [9, -10, 0xd85a88, 1.05],
-  [-22, 0, 0x3e822e, 1.2],
-  [22, 0, 0x3e822e, 1.2]
-];
-plazaTrees.forEach(([tx, tz, col, sc]) => addTree(tx, tz, col, sc));
-
-// --- 2. CALLE PALMA (EJE HISTÓRICO COMERCIAL EN Z: 28) ---
-// Veredas y canteros con árboles
-addBox(0, 0, 21.2, 170, 0.22, 4.4, paverMat, false);
-addBox(0, 0, 34.8, 170, 0.22, 4.4, paverMat, false);
-createLandmarkSign('CALLE PALMA', 'Corazón Comercial e Histórico de Asunción', 0, 5.5, 28, Math.PI / 2);
-
-const palmaPalettes = [
-  ['#e6d2b5', '#8c5a3c', 2, 4, false],
-  ['#d9a77a', '#5c3a24', 3, 4, true],
-  ['#c97b63', '#f2e8d5', 2, 3, false],
-  ['#e8dec8', '#6b4c35', 3, 5, true],
-  ['#b88b62', '#3d2b1f', 2, 4, false]
-];
-
-for (let i = -64; i <= 64; i += 16) {
-  if (Math.abs(i) < 12) continue; // Paso libre hacia la Plaza de la Democracia
-
-  const [w1, t1, fl1, co1, arc1] = palmaPalettes[Math.abs(i) % palmaPalettes.length];
-  const h1 = fl1 * 3.4;
-  const tex1 = makeFacadeTexture(w1, t1, fl1, co1, arc1);
-  const mat1 = new THREE.MeshStandardMaterial({ map: tex1, roughness: 0.78 });
-  addBox(i, 0, 13.5, 14.2, h1, 9.2, mat1, true);
-  // Cornisa / techo superior
-  addBox(i, h1, 13.5, 14.6, 0.55, 9.6, 0x6e4730, true);
-
-  const [w2, t2, fl2, co2, arc2] = palmaPalettes[(Math.abs(i) + 2) % palmaPalettes.length];
-  const h2 = fl2 * 3.4;
-  const tex2 = makeFacadeTexture(w2, t2, fl2, co2, arc2);
-  const mat2 = new THREE.MeshStandardMaterial({ map: tex2, roughness: 0.78 });
-  addBox(i, 0, 42.5, 14.2, h2, 9.2, mat2, true);
-  addBox(i, h2, 42.5, 14.6, 0.55, 9.6, 0x5c3c28, true);
-
-  // Árboles de vereda en Calle Palma
-  addTree(i + 7.5, 21.2, 0x3b7d2b, 0.9);
-  addTree(i - 7.5, 34.8, 0x458a33, 0.92);
-}
-
-// --- 3. CASA DE LA INDEPENDENCIA (ESTILO COLONIAL PARAGUAYO CON TEJAS Y GALERÍA) ---
-const indTex = makeFacadeTexture('#f7f3ea', '#8b3a2b', 1, 3, true);
-const indMat = new THREE.MeshStandardMaterial({ map: indTex, roughness: 0.82 });
-
-addBox(-72, 0, 28, 17, 5.6, 19, indMat, true);
-// Tejado inclinado escalonado de tejas rojas
-addBox(-72, 5.6, 28, 18.2, 0.9, 20.2, 0xa83b24, true);
-addBox(-72, 6.5, 28, 13.5, 0.8, 15.0, 0x94321d, true);
-// Escalera de acceso a la entrada principal
-addStaircase(-61.5, 0, 28, 4.2, 1.1, 2.4, 5, -1, 0xe5ddd0);
-createLandmarkSign('CASA DE LA INDEPENDENCIA', 'Gesta de Mayo 1811 — Asunción', -59, 8.2, 28, Math.PI / 2);
-
-addTree(-62, 19.5, 0x3c7e2c, 1.15);
-addTree(-62, 36.5, 0xd85a88, 1.1);
-
-// --- 4. EL CABILDO / CENTRO CULTURAL DE LA REPÚBLICA (CON ESCALINATA Y COLUMNATA) ---
-// Parque y corredor con pasto rumbo al Cabildo
-addBox(-24, 0, -45, 14, 0.22, 44, grassMat, false);
-addBox(24, 0, -45, 14, 0.22, 44, grassMat, false);
-addBox(-9.5, 0, -45, 3.2, 0.22, 44, paverMat, false);
-addBox(9.5, 0, -45, 3.2, 0.22, 44, paverMat, false);
-
-const cabildoTex = makeFacadeTexture('#f2e8d5', '#c9b79c', 2, 7, false);
-const cabildoMat = new THREE.MeshStandardMaterial({ map: cabildoTex, roughness: 0.78 });
-
-// Base elevada y cuerpo principal del Cabildo
-addBox(0, 0, -78, 40, 1.4, 16, paverMat, true);
-addBox(0, 1.4, -78, 38, 10.2, 14, cabildoMat, true);
-addBox(0, 11.6, -78, 39.2, 1.4, 15.2, 0xa6442e, true);
-
-// Columnas clásicas frontales
-for (let cx = -16; cx <= 16; cx += 4) {
-  addBox(cx, 1.4, -70.4, 0.85, 10.2, 0.85, 0xfaf6ee, true);
-}
-
-// Escalinata real ancha frente al Cabildo
-addStaircase(0, 0, -68.5, 14, 1.4, 3.6, 7, -1, 0xe3dbd0);
-createLandmarkSign('EL CABILDO', 'Centro Cultural de la República', 0, 14.5, -69, 0);
-
-addTree(-18, -56, 0x3c7d2b, 1.25);
-addTree(18, -56, 0xe8b825, 1.2);
-addTree(-23, -34, 0x458b32, 1.15);
-addTree(23, -34, 0x387828, 1.15);
-
-// --- PERSONAJE JUGABLE (MANTENIDO COMO EN LA VERSIÓN ANTERIOR) ---
+// --- JUGADOR (GUERRERO 16-BIT CON ESPADA Y ARCO DE TAJO) ---
 const player = new THREE.Group();
-player.position.set(0, 0, 8);
+player.position.set(0, 0, 4);
 scene.add(player);
 
-const torso = new THREE.Mesh(
-  new THREE.BoxGeometry(0.75, 1.0, 0.42),
-  new THREE.MeshStandardMaterial({ color: 0xf4f4f4 })
+const pTorso = new THREE.Mesh(
+  new THREE.BoxGeometry(0.85, 1.05, 0.5),
+  new THREE.MeshStandardMaterial({ color: 0x2b6cb0, roughness: 0.7 })
 );
-torso.position.y = 1.15;
-torso.castShadow = true;
-player.add(torso);
+pTorso.position.y = 1.15;
+pTorso.castShadow = true;
+player.add(pTorso);
 
-const head = new THREE.Mesh(
-  new THREE.BoxGeometry(0.45, 0.45, 0.45),
-  new THREE.MeshStandardMaterial({ color: 0xd99b72 })
+const pHead = new THREE.Mesh(
+  new THREE.BoxGeometry(0.58, 0.58, 0.58),
+  new THREE.MeshStandardMaterial({ color: 0xf0c29b, roughness: 0.7 })
 );
-head.position.y = 1.92;
-head.castShadow = true;
-player.add(head);
+pHead.position.y = 1.98;
+pHead.castShadow = true;
+player.add(pHead);
 
-const legMat = new THREE.MeshStandardMaterial({ color: 0x243447 });
-const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.7, 0.34), legMat);
-leftLeg.position.set(-0.2, 0.35, 0);
+const pHelm = new THREE.Mesh(
+  new THREE.BoxGeometry(0.64, 0.22, 0.64),
+  new THREE.MeshStandardMaterial({ color: 0xe53e3e })
+);
+pHelm.position.y = 2.22;
+player.add(pHelm);
+
+const legGeo = new THREE.BoxGeometry(0.34, 0.72, 0.36);
+const legMat = new THREE.MeshStandardMaterial({ color: 0x374151 });
+const leftLeg = new THREE.Mesh(legGeo, legMat);
+leftLeg.position.set(-0.22, 0.36, 0);
 leftLeg.castShadow = true;
 player.add(leftLeg);
 
-const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.7, 0.34), legMat);
-rightLeg.position.set(0.2, 0.35, 0);
+const rightLeg = new THREE.Mesh(legGeo, legMat);
+rightLeg.position.set(0.22, 0.36, 0);
 rightLeg.castShadow = true;
 player.add(rightLeg);
 
-// --- CONTROLES DE TECLADO, MOUSE Y TÁCTIL ---
+const swordPivot = new THREE.Group();
+swordPivot.position.set(0.55, 1.25, 0.25);
+player.add(swordPivot);
+
+const swordBlade = new THREE.Mesh(
+  new THREE.BoxGeometry(0.16, 0.16, 1.55),
+  new THREE.MeshStandardMaterial({ color: 0xe2e8f0, emissive: 0x3b82f6, emissiveIntensity: 0.25 })
+);
+swordBlade.position.set(0, 0, 0.7);
+swordPivot.add(swordBlade);
+
+const swordGuard = new THREE.Mesh(
+  new THREE.BoxGeometry(0.48, 0.16, 0.16),
+  new THREE.MeshStandardMaterial({ color: 0xf5c542 })
+);
+swordGuard.position.set(0, 0, 0.05);
+swordPivot.add(swordGuard);
+
+// Destello visual al golpear
+const slashArc = new THREE.Mesh(
+  new THREE.BoxGeometry(2.4, 0.25, 1.2),
+  new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.0 })
+);
+slashArc.position.set(0, 1.25, 1.7);
+player.add(slashArc);
+
+// --- ENEMIGOS: ESQUELETOS, ZOMBIS RABIOSOS Y BRUJO/JEFE CADA 3 OLEADAS ---
+const enemies = [];
+
+function createSkeletonMesh() {
+  const g = new THREE.Group();
+  const boneMat = new THREE.MeshStandardMaterial({ color: 0xede9d8, roughness: 0.75 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x1e2028, roughness: 0.85 });
+
+  const rib = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.95, 0.42), boneMat);
+  rib.position.y = 1.12;
+  rib.castShadow = true;
+  g.add(rib);
+
+  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.56, 0.56), boneMat);
+  skull.position.y = 1.92;
+  skull.castShadow = true;
+  g.add(skull);
+
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff4d2e });
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.08), eyeMat);
+  eyeL.position.set(-0.14, 1.95, 0.28);
+  const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.08), eyeMat);
+  eyeR.position.set(0.14, 1.95, 0.28);
+  g.add(eyeL, eyeR);
+
+  const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.72, 0.26), boneMat);
+  lLeg.position.set(-0.2, 0.36, 0);
+  const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.72, 0.26), boneMat);
+  rLeg.position.set(0.2, 0.36, 0);
+  g.add(lLeg, rLeg);
+
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.75, 0.45), darkMat);
+  shield.position.set(0.48, 1.15, 0.25);
+  g.add(shield);
+
+  return { group: g, lLeg, rLeg };
+}
+
+function createRabidZombieMesh(isBoss = false) {
+  const scale = isBoss ? 1.55 : 1.0;
+  const g = new THREE.Group();
+  g.scale.setScalar(scale);
+
+  const skinMat = new THREE.MeshStandardMaterial({
+    color: isBoss ? 0x7a4988 : 0x5c8d46,
+    roughness: 0.78
+  });
+  const shirtMat = new THREE.MeshStandardMaterial({
+    color: isBoss ? 0x9b2c2c : 0x6b2d2d,
+    roughness: 0.85
+  });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2a3142, roughness: 0.85 });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.86, 1.05, 0.5), shirtMat);
+  body.position.y = 1.15;
+  body.castShadow = true;
+  g.add(body);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.62), skinMat);
+  head.position.y = 1.98;
+  head.castShadow = true;
+  g.add(head);
+
+  if (isBoss) {
+    const crown = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.28, 0.7),
+      new THREE.MeshBasicMaterial({ color: 0xf5c542 })
+    );
+    crown.position.y = 2.4;
+    g.add(crown);
+  }
+
+  const rageEye = new THREE.MeshBasicMaterial({ color: 0xff1e1e });
+  const e1 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.08), rageEye);
+  e1.position.set(-0.15, 2.02, 0.32);
+  const e2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.08), rageEye);
+  e2.position.set(0.15, 2.02, 0.32);
+  g.add(e1, e2);
+
+  const armGeo = new THREE.BoxGeometry(0.26, 0.26, 0.85);
+  const armL = new THREE.Mesh(armGeo, skinMat);
+  armL.position.set(-0.54, 1.42, 0.42);
+  const armR = new THREE.Mesh(armGeo, skinMat);
+  armR.position.set(0.54, 1.42, 0.42);
+  g.add(armL, armR);
+
+  const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), pantsMat);
+  lLeg.position.set(-0.22, 0.36, 0);
+  const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), pantsMat);
+  rLeg.position.set(0.22, 0.36, 0);
+  g.add(lLeg, rLeg);
+
+  return { group: g, lLeg, rLeg };
+}
+
+function spawnEnemy(type, isBoss = false) {
+  const built = type === 'zombie' ? createRabidZombieMesh(isBoss) : createSkeletonMesh();
+
+  let sx = 0;
+  let sz = 0;
+  for (let tries = 0; tries < 20; tries++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 18 + Math.random() * 11;
+    sx = Math.cos(angle) * dist;
+    sz = Math.sin(angle) * dist;
+    if (Math.hypot(sx - player.position.x, sz - player.position.z) > 12) break;
+  }
+
+  built.group.position.set(sx, 0, sz);
+  scene.add(built.group);
+
+  enemies.push({
+    type,
+    isBoss,
+    group: built.group,
+    lLeg: built.lLeg,
+    rLeg: built.rLeg,
+    hp: isBoss ? 140 : type === 'zombie' ? 45 : 35,
+    speed: isBoss ? 5.6 : type === 'zombie' ? 7.0 : 5.2,
+    damage: isBoss ? 22 : type === 'zombie' ? 14 : 10,
+    attackCooldown: 0
+  });
+}
+
+let wave = 1;
+let score = 0;
+let combo = 1;
+let comboTimer = 0;
+let playerHp = 100;
+let stamina = 100;
+let isGameOver = false;
+let waveTransitionTimer = 0;
+let screenShake = 0;
+
+const centerBanner = document.getElementById('center-banner');
+function showBanner(msg, duration = 1.9) {
+  centerBanner.textContent = msg;
+  centerBanner.classList.remove('hidden');
+  waveTransitionTimer = duration;
+}
+
+function startWave(w) {
+  const count = 4 + w * 2;
+  for (let i = 0; i < count; i++) {
+    spawnEnemy(i % 2 === 0 ? 'zombie' : 'skeleton', false);
+  }
+  if (w % 3 === 0) {
+    spawnEnemy('zombie', true);
+    showBanner(`OLEADA ${w} — ¡ZOMBI JEFE RABIOSO APARECIÓ!`, 2.4);
+  } else {
+    showBanner(`OLEADA ${w} — ESQUELETOS Y ZOMBIS RABIOSOS`, 2.0);
+  }
+  if (crates.length < 3) {
+    spawnCrate((Math.random() - 0.5) * 24, (Math.random() - 0.5) * 24);
+  }
+}
+
+startWave(wave);
+
+// --- CONTROLES ---
 const keys = {};
 window.addEventListener('keydown', (e) => {
   keys[e.code] = true;
+  if (e.code === 'KeyJ' || e.code === 'KeyF') performAttack(false);
+  if (e.code === 'KeyK') performAttack(true);
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') triggerDash();
+  if (e.code === 'KeyR' && isGameOver) restartGame();
 });
 window.addEventListener('keyup', (e) => {
   keys[e.code] = false;
 });
 
 let camYaw = 0;
-let camPitch = 0.28;
-let isDraggingCam = false;
-let prevPointer = { x: 0, y: 0 };
+let camPitch = 0.35;
+let isDragging = false;
+let prevPtr = { x: 0, y: 0 };
+let pointerDownPos = { x: 0, y: 0 };
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  isDraggingCam = true;
-  prevPointer = { x: e.clientX, y: e.clientY };
+  ensureAudio();
+  isDragging = true;
+  prevPtr = { x: e.clientX, y: e.clientY };
+  pointerDownPos = { x: e.clientX, y: e.clientY };
 });
 
 window.addEventListener('pointermove', (e) => {
-  if (!isDraggingCam) return;
-  const dx = e.clientX - prevPointer.x;
-  const dy = e.clientY - prevPointer.y;
-  prevPointer = { x: e.clientX, y: e.clientY };
-
-  camYaw -= dx * 0.0065;
-  camPitch = Math.max(0.08, Math.min(1.05, camPitch + dy * 0.005));
+  if (!isDragging) return;
+  const dx = e.clientX - prevPtr.x;
+  const dy = e.clientY - prevPtr.y;
+  prevPtr = { x: e.clientX, y: e.clientY };
+  camYaw -= dx * 0.008;
+  camPitch = Math.max(0.14, Math.min(1.05, camPitch + dy * 0.006));
 });
 
-window.addEventListener('pointerup', () => {
-  isDraggingCam = false;
+window.addEventListener('pointerup', (e) => {
+  if (!isDragging) return;
+  isDragging = false;
+  const moved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+  if (moved < 8) {
+    if (isGameOver) restartGame();
+    else performAttack(false);
+  }
 });
 
 // Joystick táctil
 const joyZone = document.getElementById('joystick-zone');
 const joyStick = document.getElementById('joystick-stick');
-let joyVector = { x: 0, y: 0 };
+let joyVec = { x: 0, y: 0 };
 let joyActive = false;
 
 joyZone.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
+  ensureAudio();
   joyActive = true;
-  updateJoystick(e);
+  updateJoy(e);
 });
-
 joyZone.addEventListener('pointermove', (e) => {
   if (!joyActive) return;
   e.stopPropagation();
-  updateJoystick(e);
+  updateJoy(e);
 });
-
-const resetJoystick = () => {
+const resetJoy = () => {
   joyActive = false;
-  joyVector = { x: 0, y: 0 };
+  joyVec = { x: 0, y: 0 };
   joyStick.style.transform = 'translate(0px, 0px)';
 };
-joyZone.addEventListener('pointerup', resetJoystick);
-joyZone.addEventListener('pointercancel', resetJoystick);
+joyZone.addEventListener('pointerup', resetJoy);
+joyZone.addEventListener('pointercancel', resetJoy);
 
-function updateJoystick(e) {
+function updateJoy(e) {
   const rect = joyZone.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
   const maxR = rect.width / 2 - 18;
-
   let dx = e.clientX - cx;
   let dy = e.clientY - cy;
-  const dist = Math.hypot(dx, dy);
-  if (dist > maxR) {
-    dx = (dx / dist) * maxR;
-    dy = (dy / dist) * maxR;
+  const d = Math.hypot(dx, dy);
+  if (d > maxR) {
+    dx = (dx / d) * maxR;
+    dy = (dy / d) * maxR;
   }
   joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
-  joyVector.x = dx / maxR;
-  joyVector.y = dy / maxR;
+  joyVec.x = dx / maxR;
+  joyVec.y = dy / maxR;
 }
 
-// Botones táctiles Correr y Saltar
-let touchSprint = false;
 let touchJump = false;
-const btnSprint = document.getElementById('btn-sprint');
-const btnJump = document.getElementById('btn-jump');
-
-btnSprint.addEventListener('pointerdown', (e) => {
+document.getElementById('btn-attack').addEventListener('pointerdown', (e) => {
   e.stopPropagation();
-  touchSprint = !touchSprint;
-  btnSprint.classList.toggle('active', touchSprint);
+  if (isGameOver) restartGame();
+  else performAttack(false);
 });
-
+document.getElementById('btn-heavy').addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  if (!isGameOver) performAttack(true);
+});
+document.getElementById('btn-dash').addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  if (!isGameOver) triggerDash();
+});
+const btnJump = document.getElementById('btn-jump');
 btnJump.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
   touchJump = true;
@@ -554,86 +573,186 @@ btnJump.addEventListener('pointerup', () => {
   touchJump = false;
 });
 
-// --- FÍSICAS TIPO GTA SAN ANDREAS (CAJAS + ESCALERAS/RAMPAS) ---
+// --- ATAQUES Y ESQUIVE ---
+let attackAnimTimer = 0;
+let attackCooldown = 0;
+let dashTimer = 0;
+let invulnTimer = 0;
 const velocity = new THREE.Vector3();
 let isGrounded = false;
-const PLAYER_RADIUS = 0.45;
-const PLAYER_HEIGHT = 2.1;
 
-function getRampHeightAt(pos) {
-  let highestRampY = 0;
-  for (const r of ramps) {
-    if (pos.x >= r.minX && pos.x <= r.maxX && pos.z >= r.minZ && pos.z <= r.maxZ) {
-      const progress = Math.min(1, Math.max(0, Math.abs(pos.z - r.zStart) / r.totalDepth));
-      const h = r.yStart + progress * (r.yEnd - r.yStart);
-      if (h > highestRampY) highestRampY = h;
-    }
-  }
-  return highestRampY;
+function triggerDash() {
+  if (isGameOver || dashTimer > 0 || stamina < 24) return;
+  stamina -= 24;
+  dashTimer = 0.18;
+  invulnTimer = 0.28;
+  const fwd = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+  velocity.x = fwd.x * 22;
+  velocity.z = fwd.z * 22;
+  playRetroTone(320, 140, 0.11, 'triangle', 0.08);
+  spawnHitParticles(player.position.x, 0.8, player.position.z, 0x7dd3fc, 5);
 }
 
-function resolveCollisions(pos) {
-  isGrounded = false;
-  const rampFloor = getRampHeightAt(pos);
+function performAttack(isHeavy) {
+  if (isGameOver || attackCooldown > 0) return;
+  if (isHeavy && stamina < 28) return;
 
-  if (pos.y <= rampFloor) {
-    pos.y = rampFloor;
-    if (velocity.y < 0) velocity.y = 0;
-    isGrounded = true;
+  if (isHeavy) {
+    stamina -= 28;
+    attackCooldown = 0.55;
+    attackAnimTimer = 0.3;
+    slashArc.scale.set(1.45, 1.35, 1.35);
+    playRetroTone(220, 75, 0.18, 'sawtooth', 0.1);
+  } else {
+    attackCooldown = 0.32;
+    attackAnimTimer = 0.2;
+    slashArc.scale.set(1, 1, 1);
+    playRetroTone(480, 180, 0.1, 'square', 0.07);
   }
+
+  slashArc.material.opacity = 0.65;
+
+  const dmg = isHeavy ? 38 : 20;
+  const range = isHeavy ? 4.2 : 3.4;
+  const knock = isHeavy ? 2.2 : 1.1;
+  const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+
+  // Golpear cajas rompibles
+  for (let c = crates.length - 1; c >= 0; c--) {
+    const cr = crates[c];
+    const distC = Math.hypot(cr.mesh.position.x - player.position.x, cr.mesh.position.z - player.position.z);
+    if (distC < range) {
+      cr.hp -= dmg;
+      spawnHitParticles(cr.mesh.position.x, 0.9, cr.mesh.position.z, 0xd99b52, 6);
+      if (cr.hp <= 0) {
+        scene.remove(cr.mesh);
+        crates.splice(c, 1);
+        score += 50;
+        playRetroTone(180, 70, 0.14, 'square', 0.08);
+        spawnPickup(cr.mesh.position.x, cr.mesh.position.z, Math.random() < 0.65 ? 'potion' : 'gem');
+      }
+    }
+  }
+
+  // Golpear enemigos
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const en = enemies[i];
+    const toEn = new THREE.Vector3().subVectors(en.group.position, player.position);
+    toEn.y = 0;
+    const dist = toEn.length();
+    if (dist < range) {
+      toEn.normalize();
+      const dot = forward.dot(toEn);
+      if (dot > 0.05 || dist < 1.6) {
+        en.hp -= dmg;
+        en.group.position.x += toEn.x * knock;
+        en.group.position.z += toEn.z * knock;
+        screenShake = isHeavy ? 0.16 : 0.07;
+        playRetroTone(160, 85, 0.09, 'square', 0.08);
+        spawnHitParticles(en.group.position.x, 1.3, en.group.position.z, en.type === 'zombie' ? 0x74c648 : 0xfaf0ca, 7);
+
+        if (en.hp <= 0) {
+          const deadPos = en.group.position.clone();
+          const wasBoss = en.isBoss;
+          const wasZombie = en.type === 'zombie';
+          scene.remove(en.group);
+          enemies.splice(i, 1);
+
+          combo = Math.min(8, combo + 1);
+          comboTimer = 4.0;
+          score += (wasBoss ? 600 : wasZombie ? 150 : 120) * combo;
+          playRetroTone(520, 780, 0.12, 'square', 0.08);
+          spawnHitParticles(deadPos.x, 1.2, deadPos.z, 0xf5c542, 10);
+
+          if (wasBoss || Math.random() < 0.25) {
+            spawnPickup(deadPos.x, deadPos.z, Math.random() < 0.6 ? 'potion' : 'gem');
+          }
+        }
+      }
+    }
+  }
+}
+
+function restartGame() {
+  for (const en of enemies) scene.remove(en.group);
+  enemies.length = 0;
+  for (const pk of pickups) scene.remove(pk.mesh);
+  pickups.length = 0;
+  for (const cr of crates) scene.remove(cr.mesh);
+  crates.length = 0;
+
+  playerHp = 100;
+  stamina = 100;
+  score = 0;
+  combo = 1;
+  wave = 1;
+  isGameOver = false;
+  player.position.set(0, 0, 4);
+  velocity.set(0, 0, 0);
+  centerBanner.classList.add('hidden');
+
+  [
+    [-6, -6],
+    [6, -6],
+    [-6, 6],
+    [6, 6]
+  ].forEach(([cx, cz]) => spawnCrate(cx, cz));
+
+  startWave(wave);
+}
+
+// --- COLISIONES XZ ---
+const RADIUS = 0.5;
+function collideXZ(pos) {
+  const limit = ARENA_HALF - 2.4;
+  pos.x = Math.max(-limit, Math.min(limit, pos.x));
+  pos.z = Math.max(-limit, Math.min(limit, pos.z));
 
   for (const box of colliders) {
-    const withinX = pos.x + PLAYER_RADIUS > box.minX && pos.x - PLAYER_RADIUS < box.maxX;
-    const withinZ = pos.z + PLAYER_RADIUS > box.minZ && pos.z - PLAYER_RADIUS < box.maxZ;
-    const withinY = pos.y + PLAYER_HEIGHT > box.minY && pos.y < box.maxY;
-
-    if (withinX && withinZ && withinY) {
-      const prevBottom = pos.y - velocity.y * 0.016;
-      if (prevBottom >= box.maxY - 0.38 && velocity.y <= 0) {
-        pos.y = box.maxY;
-        velocity.y = 0;
-        isGrounded = true;
-        continue;
-      }
-
-      const overlapLeft = pos.x + PLAYER_RADIUS - box.minX;
-      const overlapRight = box.maxX - (pos.x - PLAYER_RADIUS);
-      const overlapFront = pos.z + PLAYER_RADIUS - box.minZ;
-      const overlapBack = box.maxZ - (pos.z - PLAYER_RADIUS);
-
-      const minOverlap = Math.min(overlapLeft, overlapRight, overlapFront, overlapBack);
-      if (minOverlap === overlapLeft) pos.x = box.minX - PLAYER_RADIUS;
-      else if (minOverlap === overlapRight) pos.x = box.maxX + PLAYER_RADIUS;
-      else if (minOverlap === overlapFront) pos.z = box.minZ - PLAYER_RADIUS;
-      else if (minOverlap === overlapBack) pos.z = box.maxZ + PLAYER_RADIUS;
+    const hitX = pos.x + RADIUS > box.minX && pos.x - RADIUS < box.maxX;
+    const hitZ = pos.z + RADIUS > box.minZ && pos.z - RADIUS < box.maxZ;
+    if (hitX && hitZ) {
+      const oL = pos.x + RADIUS - box.minX;
+      const oR = box.maxX - (pos.x - RADIUS);
+      const oF = pos.z + RADIUS - box.minZ;
+      const oB = box.maxZ - (pos.z - RADIUS);
+      const m = Math.min(oL, oR, oF, oB);
+      if (m === oL) pos.x = box.minX - RADIUS;
+      else if (m === oR) pos.x = box.maxX + RADIUS;
+      else if (m === oF) pos.z = box.minZ - RADIUS;
+      else if (m === oB) pos.z = box.maxZ + RADIUS;
     }
   }
 }
 
-// --- HUD DE ZONA Y RELOJ ESTILO 2004 ---
-const zoneBanner = document.getElementById('zone-banner');
-const coordsEl = document.getElementById('coords');
-const clockHud = document.getElementById('clock-hud');
-let gameMinutes = 16 * 60 + 20; // Inicia a las 16:20 (tarde cálida de Asunción)
+// --- HUD ---
+const hpBar = document.getElementById('hp-bar');
+const hpText = document.getElementById('hp-text');
+const staminaBar = document.getElementById('stamina-bar');
+const staminaText = document.getElementById('stamina-text');
+const waveText = document.getElementById('wave-text');
+const scoreText = document.getElementById('score-text');
+const comboText = document.getElementById('combo-text');
 
-function updateHUD(pos, dt) {
-  coordsEl.textContent = `X: ${Math.round(pos.x)} | Z: ${Math.round(pos.z)}`;
+function updateHUD(dt) {
+  const clampedHp = Math.max(0, playerHp);
+  hpBar.style.width = `${clampedHp}%`;
+  hpText.textContent = `${Math.ceil(clampedHp)}`;
 
-  if (pos.z < -48) {
-    zoneBanner.textContent = 'EL CABILDO';
-  } else if (pos.x < -46 && pos.z > 12) {
-    zoneBanner.textContent = 'CASA DE LA INDEPENDENCIA';
-  } else if (pos.z > 18 && pos.z < 38) {
-    zoneBanner.textContent = 'CALLE PALMA';
-  } else {
-    zoneBanner.textContent = 'PLAZA DE LA DEMOCRACIA';
+  const clampedStam = Math.max(0, stamina);
+  staminaBar.style.width = `${clampedStam}%`;
+  staminaText.textContent = `${Math.floor(clampedStam)}`;
+
+  waveText.textContent = `${wave}`;
+  scoreText.textContent = `${score}`;
+  comboText.textContent = `x${combo}`;
+
+  if (waveTransitionTimer > 0 && !isGameOver) {
+    waveTransitionTimer -= dt;
+    if (waveTransitionTimer <= 0) {
+      centerBanner.classList.add('hidden');
+    }
   }
-
-  // Avance suave del reloj estilo GTA (1 segundo real = 1 minuto de juego)
-  gameMinutes = (gameMinutes + dt * 1.0) % (24 * 60);
-  const hh = String(Math.floor(gameMinutes / 60)).padStart(2, '0');
-  const mm = String(Math.floor(gameMinutes % 60)).padStart(2, '0');
-  clockHud.textContent = `${hh}:${mm}`;
 }
 
 // --- LOOP PRINCIPAL ---
@@ -642,82 +761,186 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
+  const elapsed = clock.elapsedTime;
 
-  skyDome.position.copy(player.position);
+  if (attackCooldown > 0) attackCooldown -= dt;
+  if (invulnTimer > 0) invulnTimer -= dt;
+  if (screenShake > 0) screenShake -= dt;
 
-  let moveForward = 0;
-  let moveRight = 0;
-  if (keys['KeyW'] || keys['ArrowUp']) moveForward += 1;
-  if (keys['KeyS'] || keys['ArrowDown']) moveForward -= 1;
-  if (keys['KeyD'] || keys['ArrowRight']) moveRight += 1;
-  if (keys['KeyA'] || keys['ArrowLeft']) moveRight -= 1;
-
-  if (joyActive) {
-    moveForward -= joyVector.y;
-    moveRight += joyVector.x;
+  if (combo > 1) {
+    comboTimer -= dt;
+    if (comboTimer <= 0) combo = 1;
   }
 
-  const inputLen = Math.hypot(moveForward, moveRight);
-  if (inputLen > 1) {
-    moveForward /= inputLen;
-    moveRight /= inputLen;
-  }
+  stamina = Math.min(100, stamina + 18 * dt);
 
-  const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'] || touchSprint;
-  const targetSpeed = isSprinting ? 14.0 : 7.5;
-
-  const forwardVec = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
-  const rightVec = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
-
-  const moveDir = new THREE.Vector3()
-    .addScaledVector(forwardVec, moveForward)
-    .addScaledVector(rightVec, moveRight);
-
-  const accel = isGrounded ? 15 : 5.5;
-  velocity.x = THREE.MathUtils.lerp(velocity.x, moveDir.x * targetSpeed, accel * dt);
-  velocity.z = THREE.MathUtils.lerp(velocity.z, moveDir.z * targetSpeed, accel * dt);
-
-  if ((keys['Space'] || touchJump) && isGrounded) {
-    velocity.y = 9.4;
-    isGrounded = false;
-  }
-  velocity.y -= 24 * dt;
-
-  player.position.x += velocity.x * dt;
-  player.position.y += velocity.y * dt;
-  player.position.z += velocity.z * dt;
-
-  resolveCollisions(player.position);
-
-  const horizSpeed = Math.hypot(velocity.x, velocity.z);
-  if (horizSpeed > 0.4) {
-    const targetRot = Math.atan2(velocity.x, velocity.z);
-    player.rotation.y = THREE.MathUtils.lerp(player.rotation.y, targetRot, 12 * dt);
-    const swing = Math.sin(clock.elapsedTime * horizSpeed * 1.4) * 0.55;
-    leftLeg.rotation.x = swing;
-    rightLeg.rotation.x = -swing;
+  if (attackAnimTimer > 0) {
+    attackAnimTimer -= dt;
+    swordPivot.rotation.x = Math.sin((1 - attackAnimTimer / 0.22) * Math.PI) * 1.5;
+    slashArc.material.opacity = Math.max(0, (attackAnimTimer / 0.22) * 0.65);
   } else {
-    leftLeg.rotation.x = 0;
-    rightLeg.rotation.x = 0;
+    swordPivot.rotation.x = 0;
+    slashArc.material.opacity = 0;
   }
 
-  const camDist = 7.6;
-  const targetCamPos = new THREE.Vector3(
-    player.position.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist,
-    player.position.y + 1.85 + Math.sin(camPitch) * camDist,
+  // Animación de antorchas
+  for (const fl of flames) {
+    fl.mesh.scale.y = 0.85 + Math.sin(elapsed * 12 + fl.phase) * 0.25;
+  }
+
+  // Actualizar partículas
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const pt = particles[i];
+    pt.life -= dt;
+    pt.vy -= 14 * dt;
+    pt.mesh.position.x += pt.vx * dt;
+    pt.mesh.position.y = Math.max(0.1, pt.mesh.position.y + pt.vy * dt);
+    pt.mesh.position.z += pt.vz * dt;
+    if (pt.life <= 0) {
+      scene.remove(pt.mesh);
+      particles.splice(i, 1);
+    }
+  }
+
+  // Recoger pociones y cristales
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const pk = pickups[i];
+    pk.age += dt;
+    pk.mesh.rotation.y += 3.2 * dt;
+    pk.mesh.position.y = 0.65 + Math.sin(elapsed * 5 + i) * 0.14;
+
+    if (Math.hypot(pk.mesh.position.x - player.position.x, pk.mesh.position.z - player.position.z) < 1.6) {
+      if (pk.kind === 'potion') {
+        playerHp = Math.min(100, playerHp + 28);
+        playRetroTone(440, 660, 0.14, 'triangle', 0.08);
+      } else {
+        score += 250 * combo;
+        playRetroTone(587, 880, 0.14, 'square', 0.08);
+      }
+      scene.remove(pk.mesh);
+      pickups.splice(i, 1);
+    }
+  }
+
+  if (!isGameOver) {
+    let mf = 0;
+    let mr = 0;
+    if (keys['KeyW'] || keys['ArrowUp']) mf += 1;
+    if (keys['KeyS'] || keys['ArrowDown']) mf -= 1;
+    if (keys['KeyD'] || keys['ArrowRight']) mr += 1;
+    if (keys['KeyA'] || keys['ArrowLeft']) mr -= 1;
+    if (joyActive) {
+      mf -= joyVec.y;
+      mr += joyVec.x;
+    }
+
+    const len = Math.hypot(mf, mr);
+    if (len > 1) {
+      mf /= len;
+      mr /= len;
+    }
+
+    const fwd = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
+    const rgt = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
+    const dir = new THREE.Vector3().addScaledVector(fwd, mf).addScaledVector(rgt, mr);
+
+    if (dashTimer > 0) {
+      dashTimer -= dt;
+    } else {
+      const speed = 8.6;
+      velocity.x = THREE.MathUtils.lerp(velocity.x, dir.x * speed, 14 * dt);
+      velocity.z = THREE.MathUtils.lerp(velocity.z, dir.z * speed, 14 * dt);
+    }
+
+    if ((keys['Space'] || touchJump) && isGrounded) {
+      velocity.y = 9.3;
+      isGrounded = false;
+      playRetroTone(240, 420, 0.09, 'square', 0.05);
+    }
+    velocity.y -= 24 * dt;
+
+    player.position.x += velocity.x * dt;
+    player.position.y += velocity.y * dt;
+    player.position.z += velocity.z * dt;
+
+    if (player.position.y <= 0) {
+      player.position.y = 0;
+      velocity.y = 0;
+      isGrounded = true;
+    }
+
+    collideXZ(player.position);
+
+    const hSpeed = Math.hypot(velocity.x, velocity.z);
+    if (hSpeed > 0.35) {
+      const targetYaw = Math.atan2(velocity.x, velocity.z);
+      player.rotation.y = THREE.MathUtils.lerp(player.rotation.y, targetYaw, 13 * dt);
+      const swing = Math.sin(elapsed * hSpeed * 1.5) * 0.55;
+      leftLeg.rotation.x = swing;
+      rightLeg.rotation.x = -swing;
+    } else {
+      leftLeg.rotation.x = 0;
+      rightLeg.rotation.x = 0;
+    }
+
+    // IA de esqueletos y zombis rabiosos
+    for (const en of enemies) {
+      if (en.attackCooldown > 0) en.attackCooldown -= dt;
+
+      const toPlayer = new THREE.Vector3().subVectors(player.position, en.group.position);
+      toPlayer.y = 0;
+      const dist = toPlayer.length();
+
+      if (dist > 0.1) {
+        toPlayer.normalize();
+        const wobble = en.type === 'zombie' ? Math.sin(elapsed * 12 + en.group.position.x) * 0.28 : 0;
+        en.group.position.x += (toPlayer.x + wobble * -toPlayer.z) * en.speed * dt;
+        en.group.position.z += (toPlayer.z + wobble * toPlayer.x) * en.speed * dt;
+        en.group.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+        collideXZ(en.group.position);
+
+        const stride = Math.sin(elapsed * en.speed * 1.8) * 0.6;
+        en.lLeg.rotation.x = stride;
+        en.rLeg.rotation.x = -stride;
+      }
+
+      const hitReach = en.isBoss ? 2.2 : 1.55;
+      if (dist < hitReach && en.attackCooldown <= 0 && invulnTimer <= 0) {
+        en.attackCooldown = en.type === 'zombie' ? 0.75 : 1.05;
+        playerHp -= en.damage;
+        combo = 1;
+        screenShake = 0.14;
+        playRetroTone(140, 55, 0.14, 'sawtooth', 0.09);
+        spawnHitParticles(player.position.x, 1.2, player.position.z, 0xff3b30, 6);
+
+        if (playerHp <= 0) {
+          playerHp = 0;
+          isGameOver = true;
+          showBanner('HAS CAÍDO — TOCA O PULSA R PARA REINICIAR', 999);
+        }
+      }
+    }
+
+    if (enemies.length === 0) {
+      wave += 1;
+      startWave(wave);
+    }
+  }
+
+  const camDist = 8.2;
+  const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake * 2.5 : 0;
+  const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake * 2.5 : 0;
+
+  const camTarget = new THREE.Vector3(
+    player.position.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist + shakeX,
+    player.position.y + 2.2 + Math.sin(camPitch) * camDist + shakeY,
     player.position.z + Math.cos(camYaw) * Math.cos(camPitch) * camDist
   );
-  camera.position.lerp(targetCamPos, 10 * dt);
+  camera.position.lerp(camTarget, 10 * dt);
   camera.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
 
-  updateHUD(player.position, dt);
+  updateHUD(dt);
   renderer.render(scene, camera);
 }
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
 
 animate();

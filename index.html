@@ -3,22 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Asunción '04 — Centro Histórico (3D)</title>
+  <title>Ruinas 16-Bit 3D — Esqueletos y Zombis Rabiosos</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- HUD estilo PS2 / 2004 -->
+  <!-- HUD retro 16-bit -->
   <div id="hud">
-    <div id="hud-top-right">
-      <div id="zone-banner">PLAZA DE LA DEMOCRACIA</div>
-      <div id="clock-hud">16:20</div>
-      <div id="coords">X: 0 | Z: 0</div>
+    <div id="hud-left">
+      <div class="stat-row">
+        <span class="stat-label">HP</span>
+        <div class="bar-frame"><div id="hp-bar"></div></div>
+        <span id="hp-text">100</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">ESTAMINA</span>
+        <div class="bar-frame"><div id="stamina-bar"></div></div>
+        <span id="stamina-text">100</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">OLEADA</span>
+        <span id="wave-text">1</span>
+        <span class="stat-sep">|</span>
+        <span class="stat-label">PUNTOS</span>
+        <span id="score-text">0</span>
+        <span class="stat-sep">|</span>
+        <span class="stat-label">COMBO</span>
+        <span id="combo-text">x1</span>
+      </div>
     </div>
-    <div id="controls-help">
-      <strong>PC:</strong> WASD / Flechas = Mover | Shift = Correr | Espacio = Saltar | Arrastrar = Cámara<br />
-      <strong>Móvil:</strong> Joystick izq. = Mover | Arrastrar der. = Cámara | Botones = Correr / Saltar
+    <div id="hud-right">
+      <div id="zone-banner">PATIO DE LAS RUINAS</div>
+      <div id="audio-status">SONIDO: ACTIVO (Toca/Pulsa para oír)</div>
     </div>
   </div>
+
+  <!-- Banner central de oleada / derrota -->
+  <div id="center-banner" class="hidden"></div>
 
   <!-- Controles táctiles para móvil -->
   <div id="touch-controls">
@@ -28,8 +48,10 @@
       </div>
     </div>
     <div id="action-buttons">
-      <button id="btn-sprint" type="button">CORRER</button>
-      <button id="btn-jump" type="button">SALTAR</button>
+      <button id="btn-attack" type="button">TAJO (J / Click)</button>
+      <button id="btn-heavy" type="button">GOLPE FUERTE (K)</button>
+      <button id="btn-dash" type="button">ESQUIVE (Shift)</button>
+      <button id="btn-jump" type="button">SALTO (Espacio)</button>
     </div>
   </div>
 
