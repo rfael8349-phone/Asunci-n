@@ -1,0 +1,141 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #111;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* HUD Superior */
+#hud {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10;
+}
+
+#zone-banner {
+  align-self: flex-end;
+  background: rgba(10, 12, 16, 0.78);
+  color: #f5c542;
+  border-left: 4px solid #d93829;
+  padding: 8px 14px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  text-shadow: 1px 1px 0 #000;
+  border-radius: 3px;
+}
+
+#coords {
+  align-self: flex-end;
+  background: rgba(0, 0, 0, 0.55);
+  color: #d8dee9;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-family: monospace;
+  border-radius: 3px;
+}
+
+#controls-help {
+  max-width: 440px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #eceff4;
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  border-radius: 4px;
+}
+
+/* Controles Táctiles */
+#touch-controls {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  pointer-events: none;
+  z-index: 20;
+}
+
+#joystick-zone {
+  width: 120px;
+  height: 120px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#joystick-base {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#joystick-stick {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(245, 197, 66, 0.85);
+  border: 2px solid #111;
+  transform: translate(0px, 0px);
+}
+
+#action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+#action-buttons button {
+  width: 78px;
+  height: 46px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  background: rgba(20, 24, 32, 0.78);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.6px;
+  touch-action: manipulation;
+}
+
+#action-buttons button:active,
+#action-buttons button.active {
+  background: #d93829;
+  border-color: #f5c542;
+}
+
+@media (min-width: 900px) {
+  #touch-controls {
+    opacity: 0.35;
+  }
+}

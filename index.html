@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Asunción 3D - Centro Histórico (MVP)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- HUD estilo retro GTA -->
+  <div id="hud">
+    <div id="zone-banner">PLAZA DE LA DEMOCRACIA</div>
+    <div id="coords">X: 0 | Z: 0</div>
+    <div id="controls-help">
+      <strong>PC:</strong> WASD / Flechas = Mover | Shift = Correr | Espacio = Saltar | Arrastrar Mouse = Cámara<br />
+      <strong>Móvil:</strong> Joystick izq. = Mover | Arrastrar der. = Cámara | Botones = Correr / Saltar
+    </div>
+  </div>
+
+  <!-- Controles táctiles para móvil -->
+  <div id="touch-controls">
+    <div id="joystick-zone">
+      <div id="joystick-base">
+        <div id="joystick-stick"></div>
+      </div>
+    </div>
+    <div id="action-buttons">
+      <button id="btn-sprint" type="button">CORRER</button>
+      <button id="btn-jump" type="button">SALTAR</button>
+    </div>
+  </div>
+
+  <!-- Three.js desde CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
