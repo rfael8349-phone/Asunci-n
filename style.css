@@ -10,8 +10,8 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: #111;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #16181d;
+  font-family: 'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif;
 }
 
 canvas {
@@ -20,7 +20,7 @@ canvas {
   height: 100%;
 }
 
-/* HUD Superior */
+/* HUD Superior estilo era 2004 */
 #hud {
   position: fixed;
   top: 14px;
@@ -28,43 +28,63 @@ canvas {
   right: 14px;
   pointer-events: none;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
   z-index: 10;
 }
 
+#hud-top-right {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
 #zone-banner {
-  align-self: flex-end;
-  background: rgba(10, 12, 16, 0.78);
-  color: #f5c542;
-  border-left: 4px solid #d93829;
-  padding: 8px 14px;
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: 1.2px;
+  background: rgba(12, 14, 18, 0.84);
+  color: #f7c948;
+  border-right: 5px solid #e03c28;
+  border-left: 2px solid rgba(255, 255, 255, 0.16);
+  padding: 7px 14px;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
+  text-shadow: 2px 2px 0 #000;
+  border-radius: 2px;
+}
+
+#clock-hud {
+  background: rgba(12, 14, 18, 0.78);
+  color: #ffffff;
+  padding: 3px 10px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  border-radius: 2px;
   text-shadow: 1px 1px 0 #000;
-  border-radius: 3px;
 }
 
 #coords {
-  align-self: flex-end;
-  background: rgba(0, 0, 0, 0.55);
-  color: #d8dee9;
-  padding: 3px 8px;
-  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.58);
+  color: #cbd5e1;
+  padding: 2px 8px;
+  font-size: 0.72rem;
   font-family: monospace;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 #controls-help {
-  max-width: 440px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #eceff4;
-  padding: 8px 10px;
-  font-size: 0.75rem;
-  line-height: 1.4;
-  border-radius: 4px;
+  max-width: 420px;
+  background: rgba(10, 12, 16, 0.68);
+  color: #f1f5f9;
+  padding: 8px 11px;
+  font-size: 0.74rem;
+  line-height: 1.42;
+  border-left: 3px solid #f7c948;
+  border-radius: 3px;
 }
 
 /* Controles Táctiles */
@@ -103,7 +123,7 @@ canvas {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: rgba(245, 197, 66, 0.85);
+  background: rgba(247, 201, 72, 0.88);
   border: 2px solid #111;
   transform: translate(0px, 0px);
 }
@@ -118,20 +138,20 @@ canvas {
 #action-buttons button {
   width: 78px;
   height: 46px;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 2px solid rgba(255, 255, 255, 0.45);
-  background: rgba(20, 24, 32, 0.78);
+  background: rgba(18, 22, 30, 0.82);
   color: #fff;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 0.78rem;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.7px;
   touch-action: manipulation;
 }
 
 #action-buttons button:active,
 #action-buttons button.active {
-  background: #d93829;
-  border-color: #f5c542;
+  background: #e03c28;
+  border-color: #f7c948;
 }
 
 @media (min-width: 900px) {

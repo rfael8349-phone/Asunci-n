@@ -3,16 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Asunción 3D - Centro Histórico (MVP)</title>
+  <title>Asunción '04 — Centro Histórico (3D)</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- HUD estilo retro GTA -->
+  <!-- HUD estilo PS2 / 2004 -->
   <div id="hud">
-    <div id="zone-banner">PLAZA DE LA DEMOCRACIA</div>
-    <div id="coords">X: 0 | Z: 0</div>
+    <div id="hud-top-right">
+      <div id="zone-banner">PLAZA DE LA DEMOCRACIA</div>
+      <div id="clock-hud">16:20</div>
+      <div id="coords">X: 0 | Z: 0</div>
+    </div>
     <div id="controls-help">
-      <strong>PC:</strong> WASD / Flechas = Mover | Shift = Correr | Espacio = Saltar | Arrastrar Mouse = Cámara<br />
+      <strong>PC:</strong> WASD / Flechas = Mover | Shift = Correr | Espacio = Saltar | Arrastrar = Cámara<br />
       <strong>Móvil:</strong> Joystick izq. = Mover | Arrastrar der. = Cámara | Botones = Correr / Saltar
     </div>
   </div>
@@ -30,7 +33,6 @@
     </div>
   </div>
 
-  <!-- Three.js desde CDN -->
   <script type="importmap">
     {
       "imports": {

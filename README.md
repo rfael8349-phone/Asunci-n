@@ -1,19 +1,16 @@
-# Asunción 3D - Centro Histórico (MVP)
+# Asunción '04 — Centro Histórico (3D)
 
-Prototipo jugable en tercera persona inspirado en las físicas arcade de *GTA San Andreas*, ambientado en el corazón histórico de **Asunción, Paraguay**.
+Escenario 3D inspirado en la estética y atmósfera de los juegos de mundo abierto de 2004 (*GTA San Andreas* / *Vice City*), ambientado en el centro histórico de **Asunción, Paraguay**.
 
-## Zonas incluidas (v0.1)
-- **Plaza de la Democracia** (punto de inicio y explanada)
-- **Calle Palma** (corredor histórico-comercial)
-- **Casa de la Independencia**
-- **El Cabildo (Centro Cultural de la República)**
+## Novedades de esta versión
+- **Cielo y atmósfera 2004:** domo celeste con nubes, sol visible y niebla de profundidad cálida.
+- **Suelo y pasto:** asfalto desgastado, veredas de baldosa y áreas verdes con pasto en la plaza y corredores.
+- **Árboles con volumen:** troncos y copas frondosas (incluyendo tonos de lapacho / tajy) en plaza, veredas y accesos.
+- **Escaleras reales:** peldaños modelados con subida fluida en la tarima de la plaza, entrada de la Casa de la Independencia y escalinata del Cabildo.
+- **Fachadas con textura:** ventanas, cornisas, tejas coloniales y columnas en edificios inspirados en el centro de Asunción.
+- **HUD estilo 2004:** indicador de zona, reloj en pantalla y controles para PC y móvil.
 
-## Controles
-- **PC:** `WASD` o `Flechas` para caminar, `Shift` para correr, `Espacio` para saltar, arrastrar el mouse para rotar la cámara.
-- **Móvil:** Joystick táctil izquierdo para moverse, arrastrar en pantalla para girar la cámara, botones `CORRER` y `SALTAR`.
-
-## Cómo publicarlo en GitHub Pages
-1. Descomprime el archivo `.zip` y sube los archivos (`index.html`, `style.css`, `main.js`, `README.md`) a la raíz de tu repositorio en GitHub.
-2. Ve a **Settings → Pages**.
-3. En **Source**, selecciona `Deploy from a branch`, elige la rama `main` y carpeta `/ (root)`.
-4. Guarda los cambios y abre el enlace generado por GitHub Pages.
+## Cómo subirlo a GitHub Pages
+1. Descomprime el archivo `.zip`.
+2. Sube los archivos (`index.html`, `style.css`, `main.js`, `README.md`) a la raíz de tu repositorio en GitHub.
+3. Activa **GitHub Pages** en **Settings → Pages → Branch: `main` / `/ (root)`**.
